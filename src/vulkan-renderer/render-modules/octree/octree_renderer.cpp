@@ -138,19 +138,13 @@ OctreeRenderer::OctreeRenderer(std::shared_ptr<RenderGraph> render_graph, std::w
 
     // Add the graphics pass for the octree renderer
     m_octree_pass = render_graph->add_graphics_pass([&](GraphicsPassBuilder &builder) {
-        // When MSAA is enabled, render to color buffer which will auto-resolve to swapchain
-        // Otherwise render directly to swapchain
-        if (!m_color_buffer.expired()) {
-            // MSAA path: write to MSAA color buffer
-            builder.writes_to(m_color_buffer, VkClearValue{0.0f, 0.0f, 0.0f});
-            // Keep the swapchain in the pass so render-graph can resolve into it
-            builder.writes_to(m_swapchain, std::nullopt);
-        } else {
-            // Non-MSAA path: write directly to swapchain
-            builder.writes_to(m_swapchain, VkClearValue{0.0f, 0.0f, 0.0f});
-        }
-
-        return builder.writes_to(m_depth_buffer, VkClearValue{.depthStencil = {.depth = 1.0f, .stencil = 0}})
+        return builder
+            .conditionally_writes_to(m_color_buffer, !m_color_buffer.expired(), VkClearValue{0.0f, 0.0f, 0.0f})
+            // When MSAA is enabled, render to color buffer which will auto-resolve to swapchain
+            // Otherwise render directly to swapchain
+            .writes_to(m_swapchain,
+                       m_color_buffer.expired() ? std::make_optional<VkClearValue>({0.0f, 0.0f, 0.0f}) : std::nullopt)
+            .writes_to(m_depth_buffer, VkClearValue{.depthStencil = {.depth = 1.0f, .stencil = 0}})
             .reads_from(m_vertex_buffer)
             .writes_to(m_index_buffer)
             .reads_from(m_index_buffer)
